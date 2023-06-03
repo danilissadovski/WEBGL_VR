@@ -110,6 +110,10 @@ function ShaderProgram(name, program) {
  * (Note that the use of the above drawPrimitive function is not an efficient
  * way to draw with WebGL.  Here, the geometry is so simple that it doesn't matter.)
  */
+function _draw(){
+    draw()
+    window.requestAnimationFrame(_draw);
+}
 function draw() {
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -119,28 +123,64 @@ function draw() {
 
     /* Get the view matrix from the SimpleRotator object.*/
     let modelView = spaceball.getViewMatrix();
+    let identityView = m4.identity();
 
-    let rotateToPointZero = m4.axisRotation([0.707, 0.707, 0], 0.7);
-    let translateToPointZero = m4.translation(0, 0, -10);
+    let rotateToPointZero = m4.axisRotation([0.707, 0.707, 0], 0.0);
+    let translateToPointZero = m4.translation(-0.03, 0, -10);
+    let translateToCenter = m4.translation(-0.5, -0.5, -10);
 
     let matAccum0 = m4.multiply(rotateToPointZero, modelView);
+    let matAccum0BG = m4.multiply(rotateToPointZero, identityView);
+    camera.getSliders();
+    camera.ApplyRightFrustum();
+    let matAccumMR = m4.multiply(camera.mModelViewMatrix,matAccum0)
+    let matAccumPR = camera.mProjectionMatrix
+    camera.ApplyLeftFrustum();
+    let matAccumML = m4.multiply(camera.mModelViewMatrix,matAccum0)
+    let matAccumPL = camera.mProjectionMatrix
     let matAccum1 = m4.multiply(translateToPointZero, matAccum0);
+    let matAccum1BG = m4.multiply(translateToCenter, matAccum0BG);
+    let matAccum2BG = m4.multiply(m4.scaling(4,4,1), matAccum1BG);
 
     /* Multiply the projection matrix times the modelview matrix to give the
        combined transformation matrix, and send that to the shader program. */
     let modelViewProjection = m4.multiply(projection, matAccum1);
 
     gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
+    gl.uniformMatrix4fv(shProgram.iModelViewMatrix, false, matAccum2BG);
+    gl.uniformMatrix4fv(shProgram.iProjectionMatrix, false, projection);
 
     gl.uniform1i(shProgram.iTMU, 0);
     gl.enable(gl.TEXTURE_2D);
     gl.uniform2fv(shProgram.iTexturePoint, [texturePoint.x, texturePoint.y]);
     gl.uniform1f(shProgram.iScalingKoef, scalingKoef);
+    gl.bindTexture(gl.TEXTURE_2D, videoTexture);
+    gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        video
+    );
+    videoSurface.Draw();
+    gl.uniformMatrix4fv(shProgram.iModelViewMatrix, false, matAccumMR);
+    gl.uniformMatrix4fv(shProgram.iProjectionMatrix, false, matAccumPR);
+    gl.bindTexture(gl.TEXTURE_2D, imageTexture);
+    gl.colorMask(false, true, true, false);
     surface.Draw();
-    let tr = SnailSurface(map(texturePoint.x,0,1,0,Math.PI*2),map(texturePoint.y,0,1,0,Math.PI*2))
+    gl.uniformMatrix4fv(shProgram.iModelViewMatrix, false, matAccumML);
+    gl.uniformMatrix4fv(shProgram.iProjectionMatrix, false, matAccumPL);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.colorMask(true, false, false, false);
+    surface.Draw();
+    gl.colorMask(true, true, true, true);
+    
+    let tr = SnailSurface(map(texturePoint.x, 0, 1, 0, Math.PI * 2), map(texturePoint.y, 0, 1, 0, Math.PI * 2))
     gl.uniform3fv(shProgram.iTranslatePoint, [tr.x, tr.y, tr.z]);
     gl.uniform1f(shProgram.iScalingKoef, -scalingKoef);
     point.DisplayPoint();
+    
 }
 
 function CreateSurfaceData() {
@@ -235,6 +275,8 @@ function initGL() {
     shProgram.iAttribVertex = gl.getAttribLocation(prog, "vertex");
     shProgram.iAttribTexture = gl.getAttribLocation(prog, "texture");
     shProgram.iModelViewProjectionMatrix = gl.getUniformLocation(prog, "ModelViewProjectionMatrix");
+    shProgram.iModelViewMatrix = gl.getUniformLocation(prog, "ModelViewMatrix");
+    shProgram.iProjectionMatrix = gl.getUniformLocation(prog, "ProjectionMatrix");
     shProgram.iTranslatePoint = gl.getUniformLocation(prog, 'translatePoint');
     shProgram.iTexturePoint = gl.getUniformLocation(prog, 'texturePoint');
     shProgram.iScalingKoef = gl.getUniformLocation(prog, 'scalingKoef');
@@ -246,6 +288,9 @@ function initGL() {
     surface.TextureBufferData(CreateTexture());
     point = new Model('Point');
     point.BufferData(CreateSphereSurface())
+    videoSurface = new Model()
+    videoSurface.BufferData([0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0])
+    videoSurface.TextureBufferData([1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1])
 
     gl.enable(gl.DEPTH_TEST);
 }
@@ -288,11 +333,24 @@ function createProgram(gl, vShader, fShader) {
  */
 function init() {
     texturePoint = { x: 0.5, y: 0.5 }
-    scalingKoef = 0.0;
+    scalingKoef = 1.0;
     let canvas;
+    camera = new StereoCamera(
+        2000,
+        70.0,
+        1,
+        0.8,
+        5,
+        100
+    );
     try {
         canvas = document.getElementById("webglcanvas");
         gl = canvas.getContext("webgl");
+        video = document.createElement('video');
+        video.setAttribute('autoplay', true);
+        window.vid = video;
+        getWebcam();
+        videoTexture = CreateWebCamTexture();
         if (!gl) {
             throw "Browser does not support WebGL";
         }
@@ -313,21 +371,19 @@ function init() {
 
     spaceball = new TrackballRotator(canvas, draw, 0);
 
-    draw()
+    _draw()
 }
 
 function LoadTexture() {
-    let texture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, texture);
+    imageTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, imageTexture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
     const image = new Image();
     image.crossOrigin = 'anonymus';
-
     image.src = "https://raw.githubusercontent.com/danilissadovski/WebGL/PGW/textur.png";
     image.onload = () => {
-        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.bindTexture(gl.TEXTURE_2D, imageTexture);
         gl.texImage2D(
             gl.TEXTURE_2D,
             0,
@@ -339,27 +395,3 @@ function LoadTexture() {
         draw()
     }
 }
-window.onkeydown = (e) => {
-    switch (e.keyCode) {
-        case 87:
-            texturePoint.x -= 0.01;
-            break;
-        case 83:
-            texturePoint.x += 0.01;
-            break;
-        case 65:
-            texturePoint.y += 0.01;
-            break;
-        case 68:
-            texturePoint.y -= 0.01;
-            break;
-    }
-    texturePoint.x = Math.max(0.001, Math.min(texturePoint.x, 0.999))
-    texturePoint.y = Math.max(0.001, Math.min(texturePoint.y, 0.999))
-    draw();
-}
-
-onmousemove = (e) => {
-    scalingKoef = map(e.clientX, 0, window.outerWidth, 0, Math.PI)
-    draw()
-};
