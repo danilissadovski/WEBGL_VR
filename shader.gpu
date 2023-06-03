@@ -5,6 +5,8 @@ const vertexShaderSource = `
 attribute vec3 vertex;
 attribute vec2 texture;
 uniform mat4 ModelViewProjectionMatrix;
+uniform mat4 ModelViewMatrix;
+uniform mat4 ProjectionMatrix;
 
 varying vec2 v_texcoord;
 
@@ -65,8 +67,8 @@ void main() {
     vec4 textureRotated = texture1*sMatrix;
     vec4 texture2 = textureRotated*t2Matrix;
     v_texcoord = vec2(texture2.x,texture2.y);
-    vec4 vertPos4 = ModelViewProjectionMatrix * vec4(vertex, 1.0);
-    gl_Position = vertPos4;
+    vec4 vertPos4 = ModelViewMatrix * vec4(vertex, 1.0);
+    gl_Position = ProjectionMatrix *vertPos4;
     if(scalingKoef<0.0){
         vec4 tPoint = translation(translatePoint.x,translatePoint.y,translatePoint.z)*vec4(vertex,1.0);
         gl_Position = ModelViewProjectionMatrix*tPoint;
