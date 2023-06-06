@@ -1,7 +1,6 @@
 # WebGL
 
-Issadovskyi Danylo TR-22mp PA1
+Issadovskyi Danylo TR-22mp PA2
 
-![image](https://github.com/danilissadovski/WEBGL_VR/blob/PA1/PA1.gif)
+![image](https://github.com/danilissadovski/WebGL_VR/blob/PA2/video-2023-06-06-20-57-24-nz0biabd-fyso9cep-wgklej6z-sy0o7tbm-mrmyrfez_lK9gXFk9.mp4)
 
-![image](https://github.com/danilissadovski/WEBGL_VR/blob/PA1/photo_2023-06-03_23-45-04.jpg)
