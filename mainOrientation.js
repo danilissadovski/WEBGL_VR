@@ -3,7 +3,7 @@ let sensor = {
   y: 0,
   z: 0
 }
-let permission=false;
+let permission = false;
 function requestDeviceOrientation() {
   if (typeof DeviceOrientationEvent !== 'undefined' &&
     typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -14,9 +14,9 @@ function requestDeviceOrientation() {
         // p.innerHTML = response
         if (response === 'granted') {
           console.log('Permission granted');
-          permission=true
+          permission = true
           window.addEventListener('deviceorientation', e => {
-            
+
             // let p = document.getElementById("p")
             // p.innerHTML = e.alpha
             sensor.x = e.alpha
@@ -63,10 +63,58 @@ function getRotationMatrix(alpha, beta, gamma) {
   var m33 = cX * cY;
 
   return [
-    m11, m12, m13,0,
-    m21, m22, m23,0,
-    m31, m32, m33,0,
-    0,0,0,1
+    m11, m12, m13, 0,
+    m21, m22, m23, 0,
+    m31, m32, m33, 0,
+    0, 0, 0, 1
   ];
 
 };
+
+function orientVector(alpha, beta, gamma) {
+  // Convert angles to radians
+  const a = (alpha * Math.PI) / 180;
+  const b = (beta * Math.PI) / 180;
+  const g = (gamma * Math.PI) / 180;
+
+  // Define the initial vector along the x-axis
+  let vector = [0, 1, 0];
+
+  // Rotation around the z-axis (gamma)
+  const rotZ = [
+    [Math.cos(g), -Math.sin(g), 0],
+    [Math.sin(g), Math.cos(g), 0],
+    [0, 0, 1]
+  ];
+  vector = multiplyMatrixVector(rotZ, vector);
+
+  // Rotation around the y-axis (beta)
+  const rotY = [
+    [Math.cos(b), 0, Math.sin(b)],
+    [0, 1, 0],
+    [-Math.sin(b), 0, Math.cos(b)]
+  ];
+  vector = multiplyMatrixVector(rotY, vector);
+
+  // Rotation around the x-axis (alpha)
+  const rotX = [
+    [1, 0, 0],
+    [0, Math.cos(a), -Math.sin(a)],
+    [0, Math.sin(a), Math.cos(a)]
+  ];
+  vector = multiplyMatrixVector(rotX, vector);
+
+  return vector;
+}
+
+function multiplyMatrixVector(matrix, vector) {
+  const result = [];
+  for (let i = 0; i < matrix.length; i++) {
+    let sum = 0;
+    for (let j = 0; j < vector.length; j++) {
+      sum += matrix[i][j] * vector[j];
+    }
+    result.push(sum);
+  }
+  return result;
+}
